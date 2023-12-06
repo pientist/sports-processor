@@ -7,17 +7,17 @@ from tqdm import tqdm
 
 
 class NBAParser:
-    def __init__(self, match_id: str, raw_dir: str = "data/nba_raw_json"):
+    def __init__(self, match_id, raw_dir="data/nba_raw_json"):
         self.raw_df = self.read_raw_data(match_id, raw_dir)
         self.metadata = dict()
         self.data = None
 
     @staticmethod
-    def read_raw_data(match_id: str, raw_dir: str = "data/nba_raw_json"):
+    def read_raw_data(match_id, raw_dir="data/nba_raw_json"):
         df = pd.read_json(f"{raw_dir}/{match_id}.json")
         return df[df.apply(lambda row: len(row["events"]["moments"]) != 0, axis=1)].reset_index(drop=True)
 
-    def set_match_info(self, verbose=False):
+    def set_metadata(self, verbose=False):
         first_episode = self.raw_df.iloc[0]
 
         self.metadata["match_id"] = int(first_episode["gameid"])
@@ -85,7 +85,7 @@ class NBAParser:
             for moment_idx, moment_data in enumerate(self.raw_df.at[i, "events"]["moments"]):
                 self.raw_df.at[i, "events"]["moments"][moment_idx][5] = {x[1]: x[2:] for x in moment_data[5]}
 
-    def format_traces(self):
+    def format_data(self):
         data = []
 
         for i in tqdm(self.raw_df.index):
@@ -159,10 +159,10 @@ class NBAParser:
                 print(f"Metadata saved in {data_dir}/{match_id}.json.")
 
     def run(self, save=False, verbose=False, data_dir="data/nba_traces", metadata_dir="data/nba_metadata"):
-        self.set_match_info(verbose)
+        self.set_metadata(verbose)
         self.remove_nested_events()
         self.moment_pos_to_dict()
-        self.format_traces()
+        self.format_data()
         self.split_phases()
         self.split_episodes()
         self.save_data(save, verbose, data_dir, metadata_dir)
