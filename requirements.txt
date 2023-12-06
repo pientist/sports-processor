@@ -1,4 +1,5 @@
+py7zr
 matplotlib
 numpy
 pandas
-py7zr  # for unzipping 7z files
+scipy

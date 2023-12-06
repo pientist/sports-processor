@@ -115,7 +115,7 @@ class NBAParser:
                     player_id = player_info["playerid"]
                     if player_id in moment_record[5].keys():
                         moment_data[f"{p}_x"] = moment_record[5][player_id][0]
-                        moment_data[f"{p}_y"] = moment_record[5][player_id][0]
+                        moment_data[f"{p}_y"] = moment_record[5][player_id][1]
                     else:
                         moment_data[f"{p}_x"] = np.nan
                         moment_data[f"{p}_y"] = np.nan
@@ -127,20 +127,34 @@ class NBAParser:
 
     def split_phases(self):
         player_x_cols = [c for c in self.data.columns if c[0] in ["A", "B"] and c[-2:] == "_x"]
-        phase_count = 1
+        count = 1
+
         for quarter in self.data["quarter"].unique():
             quarter_traces = self.data[self.data["quarter"] == quarter]
             new_phase = quarter_traces[player_x_cols].notna().astype(int).diff().abs().sum(axis=1).clip(0, 1)
-            self.data.loc[quarter_traces.index, "phase"] = new_phase.astype(int).cumsum() + phase_count
-            phase_count += new_phase.astype(int).sum() + 1
+            self.data.loc[quarter_traces.index, "phase"] = new_phase.astype(int).cumsum() + count
+            count += new_phase.astype(int).sum() + 1
 
-    def split_episodes(self, episode_margin=5):
-        episode_count = 1
+    def split_episodes(self, episode_margin=5, min_duration=5):
+        count = 1
+
         for phase in self.data["phase"].unique():
             phase_traces = self.data[self.data["phase"] == phase]
-            new_episode = (phase_traces["time"].diff() > episode_margin * 1000).astype(int)
-            self.data.loc[phase_traces.index, "episode"] = new_episode.cumsum() + episode_count
-            episode_count += new_episode.sum() + 1
+            episode_labels = (phase_traces["time"].diff() > episode_margin * 1000).astype(int).cumsum() + count
+
+            episode_lens = episode_labels.value_counts(sort=False)
+            for episode in episode_lens.index:
+                if episode_lens[episode] < min_duration * 25:
+                    episode_labels.loc[episode_labels == episode] = 0
+                if len(phase_traces.loc[episode_labels == episode, "shot_clock"].dropna().unique()) == 1:
+                    episode_labels.loc[episode_labels == episode] = 0
+
+            self.data.loc[phase_traces.index, "episode"] = episode_labels
+            count += len(episode_lens)
+
+        self.data = self.data[self.data["episode"] > 0].copy()
+        episodes = self.data["episode"].unique()
+        self.data["episode"] = self.data["episode"].replace(dict(zip(episodes, np.arange(len(episodes)) + 1)))
 
     def save_data(self, save=False, verbose=False, data_dir="data/nba_data", metadata_dir="data/nba_metadata"):
         if save:
